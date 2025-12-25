@@ -1,0 +1,1 @@
+.{ .name = .kzbox, .version = "0.0.1", .minimum_zig_version = "0.15.2", .paths = .{ "applets/", "kzbox.zig", "lib.zig" }, .fingerprint = 0xdbaa6091c2c60916 }
