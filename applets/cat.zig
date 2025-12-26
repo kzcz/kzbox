@@ -13,6 +13,7 @@ pub fn main(args: [][:0]u8) !u8 {
 
     var reader_buf = try alloc.alloc(u8, 512);
     defer alloc.free(reader_buf);
+    var always_flush: bool = false;
 
     const cwd = std.fs.cwd();
     var parser = Parser.init(if (args.len == 0) &[_][:0]const u8{"-"} else args[1..]);
@@ -21,9 +22,12 @@ pub fn main(args: [][:0]u8) !u8 {
         if (arg.source == null and arg.value == null) break;
         if (arg.source) |s| {
             switch (s) {
-                .u => continue,
+                .u => {
+                    always_flush = true;
+                    continue;
+                },
                 .help => {
-                    try lib.help_printer(Parser, .{ .u = "ignored", .version = "Print the version string", .help = "Print this help message" }, help, out);
+                    try Parser.help_printer(help, out);
                     break;
                 },
                 .version => {
@@ -46,17 +50,12 @@ pub fn main(args: [][:0]u8) !u8 {
         };
         defer if (freal) file.close();
         var count: usize = undefined;
-        while (true) {
-            count = file.read(reader_buf) catch {
-                failed = true;
-                break;
-            };
-            out.writeAll(reader_buf[0..count]) catch {
-                failed = true;
-                break;
-            };
-            if (count == 0) break;
-        }
+        failed = (blk: while (true) {
+            count = file.read(reader_buf) catch break :blk true;
+            if (count == 0) break :blk false;
+            out.writeAll(reader_buf[0..count]) catch break :blk true;
+            if (always_flush) out.flush() catch break :blk true;
+        }) or failed;
         try out.flush();
     } else |_| {
         try parser.printLastError(eout, self_name);

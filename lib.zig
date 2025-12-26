@@ -20,7 +20,7 @@ pub const arg_parser = struct {
             try w.flush();
         }
     };
-    pub const Arg = struct { name: [:0]const u8, has_args: bool = false };
+    pub const Arg = struct { name: [:0]const u8, has_args: bool = false, help: []const u8 };
     pub const Config = struct {
         allow_intermix: bool,
     };
@@ -50,8 +50,8 @@ pub const arg_parser = struct {
 
         return &ret;
     }
-    pub fn val(name: [:0]const u8, has_args: bool) Arg {
-        return .{ .name = name, .has_args = has_args };
+    pub fn val(name: [:0]const u8, has_args: bool, help: []const u8) Arg {
+        return .{ .name = name, .has_args = has_args, .help = help };
     }
     pub fn Gen(comptime arg_tuple: anytype, comptime _config: Config) type {
         const _args: []const Arg = tupleToArgs(arg_tuple);
@@ -71,9 +71,11 @@ pub const arg_parser = struct {
                 return .{ .parse = true, .feed = feed, .idx = 0, .off = 0, .config = _config };
             }
             pub const RTEnum = PrivRTEnum;
-            pub const RT = struct {
-                source: ?RTEnum,
-                value: ?[]const u8,
+            pub const RT = union(enum(u2)) {
+                eof: void,
+                positional: []const u8,
+                flag: RTEnum,
+                flag_args: struct { RTEnum, []const u8 },
             };
             pub fn getPos(str: []const u8) ?usize {
                 for (0.., args) |i, arg| {
@@ -84,18 +86,33 @@ pub const arg_parser = struct {
             pub fn printLastError(self: *@This(), w: *std.Io.Writer, arg0: [:0]const u8) std.Io.Writer.Error!void {
                 return (self.__err orelse return).print(w, arg0);
             }
+            pub inline fn help_printer(comptime msg: []const u8, w: *std.Io.Writer) !void {
+                const names = comptime blk: {
+                    var ls: [args.len][:0]const u8 = undefined;
+                    for (0.., args) |i, arg| ls[i] = arg.name;
+                    break :blk ls;
+                };
+                const longest = comptime names[findLongestSlice([:0]const u8, &names)].len;
+                try w.writeAll("Synopsis: " ++ msg ++ "\nFlags: \n");
+                inline for (args) |arg| {
+                    const n = arg.name;
+                    try w.writeAll(comptime ("\t" ++ (if (n.len > 1) "--" else "-") ++ n ++ " " ** (1 + longest - n.len) ++ "- " ++ arg.help ++ "\n"));
+                }
+                try w.writeAll("\nVersion: " ++ root.version ++ "\n");
+                try w.flush();
+            }
             pub fn nextArg(self: *@This()) Error!RT {
-                if (self.idx >= self.feed.len) return .{ .value = null, .source = null };
+                if (self.idx >= self.feed.len) return .{ .eof = void{} };
                 var next = self.feed[self.idx];
                 var symbol: ?[]const u8 = null;
                 errdefer |e| self.__err = .{ .err = e, .symbol = symbol.? };
                 self.idx += 1;
                 if (next.len == 0) return self.nextArg();
-                if (!self.parse) return .{ .value = next, .source = null };
+                if (!self.parse) return .{ .positional = next };
                 if (self.off == 0) {
                     if (next[0] != '-' or next.len == 1) {
                         self.parse = self.config.allow_intermix;
-                        return .{ .value = next, .source = null };
+                        return .{ .positional = next };
                     }
                     if (next[1] != '-') {
                         // short
@@ -108,18 +125,18 @@ pub const arg_parser = struct {
                                 self.off += 1;
                                 self.idx -= 1;
                             }
-                            return .{ .value = null, .source = source };
+                            return .{ .flag = source };
                         }
                         if (next.len == 2) {
                             if (self.idx >= self.feed.len) return error.MissingValue;
                             self.idx += 1;
-                            return .{ .value = self.feed[self.idx - 1], .source = source };
+                            return .{ .flag_args = .{ source, self.feed[self.idx - 1] } };
                         }
-                        return .{ .value = next[2..next.len], .source = source };
+                        return .{ .flag_args = .{ source, next[2..next.len] } };
                     }
                     if (next.len == 2) {
                         self.parse = false;
-                        return .{ .value = next, .source = null };
+                        return RT{ .positional = next };
                     }
                     // long
                     if (next.len == 3) {
@@ -137,18 +154,18 @@ pub const arg_parser = struct {
                         const arg = args[@intFromEnum(source)];
                         if (!arg.has_args) return error.UnexpectedValue;
                         if (next.len - eq_idx == 1) return error.MissingValue;
-                        return .{ .value = next[eq_idx + 1 .. next.len], .source = source };
+                        return .{ .flag_args = .{ source, next[eq_idx + 1 .. next.len] } };
                     }
                     const sn = next[2..];
                     symbol = sn;
                     const source: RTEnum = @enumFromInt(getPos(sn) orelse return error.NotFound);
                     const arg = args[@intFromEnum(source)];
                     if (!arg.has_args) {
-                        return .{ .value = null, .source = source };
+                        return .{ .flag = source };
                     }
                     if (self.idx >= self.feed.len) return error.MissingValue;
                     self.idx += 1;
-                    return .{ .value = self.feed[self.idx - 1], .source = source };
+                    return .{ .flag_args = .{ source, self.feed[self.idx - 1] } };
                 }
                 const sn = next[self.off + 1 .. self.off + 2];
                 symbol = sn;
@@ -161,17 +178,17 @@ pub const arg_parser = struct {
                     } else {
                         self.idx -= 1;
                     }
-                    return .{ .value = null, .source = source };
+                    return .{ .flag = source };
                 }
                 const t = self.off + 2;
                 if (t >= next.len) {
                     if (self.idx >= self.feed.len) return error.MissingValue;
                     self.off = 0;
                     self.idx += 1;
-                    return .{ .value = self.feed[self.idx - 1], .source = source };
+                    return .{ .flag_args = .{ source, self.feed[self.idx - 1] } };
                 }
                 self.off = 0;
-                return .{ .value = next[t..next.len], .source = source };
+                return .{ .flag_args = .{ source, next[t..next.len] } };
             }
         };
     }
@@ -191,12 +208,4 @@ pub inline fn findLongestSlice(comptime T: type, buf: []const T) usize {
         }
     }
     return best_idx;
-}
-pub inline fn help_printer(comptime Parser: type, comptime msgs: arg_parser.EnumToList(Parser.RTEnum, []const u8), comptime msg: []const u8, w: *std.Io.Writer) !void {
-    const names = comptime std.meta.fieldNames(Parser.RTEnum);
-    const longest = comptime names[findLongestSlice([:0]const u8, names)].len;
-    try w.writeAll("Synopsis: " ++ msg ++ "\nFlags: \n");
-    inline for (names) |n| try w.writeAll(comptime ("\t" ++ (if (n.len > 1) "--" else "-") ++ n ++ " " ** (1 + longest - n.len) ++ "- " ++ @field(msgs, n) ++ "\n"));
-    try w.writeAll("\nVersion: " ++ root.version ++ "\n");
-    try w.flush();
 }
