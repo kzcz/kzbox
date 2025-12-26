@@ -4,7 +4,7 @@ pub fn main() !u8 {
     const alloc = arena.allocator();
     defer arena.deinit();
     const args = try std.process.argsAlloc(alloc);
-    if (args.len != 3) {
+    if (args.len != 2) {
         std.debug.print("Usage: {s} ROOT\n", .{args[0]});
         return 1;
     }

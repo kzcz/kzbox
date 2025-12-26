@@ -10,6 +10,6 @@ pub fn build(b: *std.Build) !void {
     const root = b.createModule(.{ .root_source_file = b.path("kzbox.zig"), .target = target, .optimize = optimize, .strip = strip });
     root.addAnonymousImport("kzlib", .{ .root_source_file = b.path("lib.zig"), .target = target, .optimize = optimize, .strip = strip });
     const exe = b.addExecutable(.{ .name = "kzbox", .root_module = root, .version = std.SemanticVersion.parse(@import("build.zig.zon").version) catch unreachable });
-    exe.step.dependOn(tstep.step);
+    exe.step.dependOn(&tstep.step);
     b.installArtifact(exe);
 }
