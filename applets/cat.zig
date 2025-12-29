@@ -4,7 +4,7 @@ const lib = @import("kzlib");
 const argp = lib.arg_parser;
 const val = argp.val;
 pub const help: []const u8 = "ConcATenate files.";
-const Parser = argp.Gen(.{ val("u", false), val("version", false), val("help", false) }, .{ .allow_intermix = false });
+const Parser = argp.Gen(.{ val("u", false, "Flushes data as it is received instead."), val("version", false, "Print the version string."), val("help", false, "Print this help message.") }, .{ .allow_intermix = false });
 pub fn main(args: [][:0]u8) !u8 {
     const out = root.out;
     const eout = root.eout;
@@ -16,28 +16,36 @@ pub fn main(args: [][:0]u8) !u8 {
     var always_flush: bool = false;
 
     const cwd = std.fs.cwd();
-    var parser = Parser.init(if (args.len == 0) &[_][:0]const u8{"-"} else args[1..]);
+    var parser = Parser.init(if (args.len == 1) (&[1][:0]const u8{"-"}) else args[1..]);
     var failed: bool = false;
-    while (parser.nextArg()) |arg| {
-        if (arg.source == null and arg.value == null) break;
-        if (arg.source) |s| {
-            switch (s) {
+    var has_opened_files: bool = false;
+    w: while (parser.nextArg()) |arg| {
+        const f: []const u8 = blk: switch (arg) {
+            .eof => {
+                if (!has_opened_files) break :blk "-";
+                break :w;
+            },
+            .flag => |f| switch (f) {
                 .u => {
                     always_flush = true;
-                    continue;
+                    continue :w;
                 },
                 .help => {
                     try Parser.help_printer(help, out);
-                    break;
+                    break :w;
                 },
                 .version => {
                     try out.print("Version: {s}\n", .{root.detailed_version});
-                    break;
+                    break :w;
                 },
                 _ => unreachable,
-            }
-        }
-        const f = arg.value.?;
+            },
+            .positional => |f| {
+                has_opened_files = true;
+                break :blk f;
+            },
+            else => unreachable,
+        };
         var freal = true;
         var file = if (f.len == 1 and f[0] == '-') bl: {
             freal = false;
