@@ -136,7 +136,7 @@ pub const arg_parser = struct {
                     }
                     if (next.len == 2) {
                         self.parse = false;
-                        return RT{ .positional = next };
+                        return self.nextArg();
                     }
                     // long
                     if (next.len == 3) {
@@ -208,4 +208,18 @@ pub inline fn findLongestSlice(comptime T: type, buf: []const T) usize {
         }
     }
     return best_idx;
+}
+pub fn properPosixBasename(path: []const u8) []const u8 {
+    if (path.len == 0) return ".";
+    const only_slash = blk: {
+        for (path) |b| {
+            if (b != '/') break :blk false;
+        }
+        break :blk true;
+    };
+    if (only_slash) return path[0..1];
+    return std.fs.path.basenamePosix(path);
+}
+pub fn removeSuffix(str: []const u8, suffix: []const u8) []const u8 {
+    return if (std.mem.endsWith(u8, str, suffix)) str[0 .. str.len - suffix.len] else str;
 }
