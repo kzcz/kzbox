@@ -23,6 +23,7 @@ pub const arg_parser = struct {
     pub const Arg = struct { name: [:0]const u8, has_args: bool = false, help: []const u8 };
     pub const Config = struct {
         allow_intermix: bool,
+        skip_empty: bool = false,
     };
     pub fn EnumToList(Enum: type, Data: type) type {
         const ti = @typeInfo(Enum);
@@ -93,21 +94,27 @@ pub const arg_parser = struct {
                     break :blk ls;
                 };
                 const longest = comptime names[findLongestSlice([:0]const u8, &names)].len;
-                try w.writeAll("Synopsis: " ++ msg ++ "\nFlags: \n");
+                comptime var tw: []const u8 = "Synopsis: " ++ msg ++ "\nFlags: \n";
                 inline for (args) |arg| {
                     const n = arg.name;
-                    try w.writeAll(comptime ("\t" ++ (if (n.len > 1) "--" else "-") ++ n ++ " " ** (1 + longest - n.len) ++ "- " ++ arg.help ++ "\n"));
+                    tw = tw ++ comptime ("\t" ++ (if (n.len > 1) "--" else "-") ++ n ++ " " ** (1 + longest - n.len) ++ "- " ++ arg.help ++ "\n");
                 }
-                try w.writeAll("\nVersion: " ++ root.version ++ "\n");
+                tw = tw ++ "\nVersion: " ++ root.version ++ "\n";
+                try w.writeAll(tw);
                 try w.flush();
             }
             pub fn nextArg(self: *@This()) Error!RT {
+                if (self.__err) |_| return error.AlreadyErrored;
                 if (self.idx >= self.feed.len) return .{ .eof = void{} };
                 var next = self.feed[self.idx];
                 var symbol: ?[]const u8 = null;
                 errdefer |e| self.__err = .{ .err = e, .symbol = symbol.? };
                 self.idx += 1;
-                if (next.len == 0) return self.nextArg();
+                if (next.len == 0) {
+                    if (self.config.skip_empty) return self.nextArg();
+                    self.parse = self.config.allow_intermix;
+                    return .{ .positional = next };
+                }
                 if (!self.parse) return .{ .positional = next };
                 if (self.off == 0) {
                     if (next[0] != '-' or next.len == 1) {
@@ -222,4 +229,25 @@ pub fn properPosixBasename(path: []const u8) []const u8 {
 }
 pub fn removeSuffix(str: []const u8, suffix: []const u8) []const u8 {
     return if (std.mem.endsWith(u8, str, suffix)) str[0 .. str.len - suffix.len] else str;
+}
+pub fn scalarTrimStart(str: []const u8, scalar: u8) []const u8 {
+    var shift: usize = 0;
+    if (str.len == 0) return str;
+    while (str[shift] == scalar) {
+        shift += 1;
+        if (shift == str.len) return str[0..0];
+    }
+    return str[shift..str.len];
+}
+pub fn scalarTrimEnd(str: []const u8, scalar: u8) []const u8 {
+    if (str.len == 0) return str;
+    var lim: usize = str.len - 1;
+    while (str[lim] == scalar) {
+        if (lim == 0) return str[0..0];
+        lim -= 1;
+    }
+    return str[0 .. lim + 1];
+}
+pub fn scalarTrim(str: []const u8, scalar: u8) []const u8 {
+    return scalarTrimEnd(scalarTrimStart(str, scalar), scalar);
 }
