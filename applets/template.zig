@@ -19,11 +19,11 @@ pub fn main(args: [][:0]u8) !u8 {
                 switch (f) {
                     .version => {
                         try out.print("Version: {s}\n", .{root.detailed_version});
-                        break;
+                        return 0;
                     },
                     .help => {
                         try Parser.help_printer(help, out);
-                        break;
+                        return 0;
                     },
                     else => unreachable,
                 }

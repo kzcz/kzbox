@@ -25,14 +25,6 @@ pub const arg_parser = struct {
         allow_intermix: bool,
         skip_empty: bool = false,
     };
-    pub fn EnumToList(Enum: type, Data: type) type {
-        const ti = @typeInfo(Enum);
-        assert(ti == .@"enum", "expected an enum, got " ++ @typeName(Enum));
-        const enum_fields = @typeInfo(Enum).@"enum".fields;
-        var fields: [enum_fields.len]sbt.StructField = undefined;
-        inline for (&fields, enum_fields) |*e, f| e.* = .{ .is_comptime = false, .name = f.name, .type = Data, .alignment = @alignOf(Data), .default_value_ptr = null };
-        return @Type(.{ .@"struct" = .{ .is_tuple = false, .layout = .auto, .decls = &.{}, .fields = &fields } });
-    }
     inline fn tupleToArgs(comptime args: anytype) []const Arg {
         const ti = @typeInfo(@TypeOf(args));
         assert(ti == .@"struct", "expected tuple, found" ++ @typeName(@TypeOf(args)));
@@ -205,6 +197,15 @@ pub inline fn findStr(src: []const u8, buf: []const []const u8) ?usize {
         if (std.mem.eql(u8, src, v)) return i;
     } else return null;
 }
+pub fn EnumToList(Enum: type, Data: type) type {
+    const ti = @typeInfo(Enum);
+    assert(ti == .@"enum", "expected an enum, got " ++ @typeName(Enum));
+    const enum_fields = @typeInfo(Enum).@"enum".fields;
+    var fields: [enum_fields.len]sbt.StructField = undefined;
+    inline for (&fields, enum_fields) |*e, f| e.* = .{ .is_comptime = false, .name = f.name, .type = Data, .alignment = @alignOf(Data), .default_value_ptr = null };
+    return @Type(.{ .@"struct" = .{ .is_tuple = false, .layout = .auto, .decls = &.{}, .fields = &fields } });
+}
+
 pub inline fn findLongestSlice(comptime T: type, buf: []const T) usize {
     var best_len: usize = 0;
     var best_idx: usize = 0;
