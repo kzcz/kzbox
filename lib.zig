@@ -1,6 +1,13 @@
 const std = @import("std");
 const root = @import("root");
+const blt = @import("builtin");
+pub const UTmpX = if (blt.link_libc) @cImport(@cInclude("utmpx.h")) else struct {
+    const utmpx = struct {};
+};
 const sbt = std.builtin.Type;
+pub inline fn dieIfNotLibC(self_name: []const u8) void {
+    if (!blt.link_libc) root.die(1, self_name, "Sorry, This program can not run when libc is not linked. Please recompile with libc so that you can use it.", .{});
+}
 pub inline fn assert(value: bool, comptime msg: []const u8) void {
     if (!value) @compileError(msg);
 }
@@ -251,4 +258,32 @@ pub fn scalarTrimEnd(str: []const u8, scalar: u8) []const u8 {
 }
 pub fn scalarTrim(str: []const u8, scalar: u8) []const u8 {
     return scalarTrimEnd(scalarTrimStart(str, scalar), scalar);
+}
+pub fn UTmpIterator() type {
+    return struct {
+        buf: UTmpX.utmpx,
+        file: std.fs.File,
+        pub fn init() !@This() {
+            if (!blt.link_libc) return error.LibCNotLinked;
+            return .{ .file = try std.fs.openFileAbsoluteZ("/var/run/utmp", .{}), .buf = undefined };
+        }
+        pub fn deinit(self: *@This()) void {
+            self.file.close();
+        }
+        pub fn next(self: *@This()) !?UTmpX.utmpx {
+            const ret = try self.file.read(@ptrCast(&self.buf));
+            if (ret == 0) return null;
+            if (ret != @sizeOf(UTmpX.utmpx)) unreachable;
+            return self.buf;
+        }
+    };
+}
+pub fn ttyname(buf: []u8) !usize {
+    const nat = "not a tty";
+    if (std.posix.isatty(0)) {
+        return (try std.posix.readlink("/proc/self/fd/0", &buf)).len;
+    } else {
+        if (buf.len < nat.len) return error.Overflow;
+        @memcpy(buf[0..nat.len], nat);
+    }
 }

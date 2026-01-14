@@ -3,7 +3,7 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const strip = b.option(bool, "strip", "Whether to strip the binary") orelse false;
-    const link_c = target.result.os.tag != .linux;
+    const link_c = (target.result.os.tag != .linux) or b.option(bool, "c", "Whether to link with musllibc") orelse true;
     const tool = b.addExecutable(.{ .name = "gen_applets", .root_module = b.createModule(.{ .root_source_file = b.path("gen_applets.zig"), .target = b.graph.host, .strip = true, .optimize = .ReleaseSafe }) });
     const tstep = b.addRunArtifact(tool);
     tstep.addArg(b.build_root.path.?);
