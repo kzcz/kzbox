@@ -1,6 +1,7 @@
 const std = @import("std");
 const root = @import("root");
 const blt = @import("builtin");
+pub extern "c" fn strerror(c_int) [*:0]const u8;
 pub const UTmpX = if (blt.link_libc) @cImport(@cInclude("utmpx.h")) else struct {
     const utmpx = struct {};
 };
@@ -278,12 +279,13 @@ pub fn UTmpIterator() type {
         }
     };
 }
-pub fn ttyname(buf: []u8) !usize {
+pub fn ttyname(buf: []u8) ![]const u8 {
     const nat = "not a tty";
     if (std.posix.isatty(0)) {
-        return (try std.posix.readlink("/proc/self/fd/0", &buf)).len;
+        return buf[0..(try std.posix.readlink("/proc/self/fd/0", buf)).len];
     } else {
         if (buf.len < nat.len) return error.Overflow;
         @memcpy(buf[0..nat.len], nat);
+        return buf[0..nat.len];
     }
 }

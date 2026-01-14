@@ -10,7 +10,7 @@ pub fn main(args: [][:0]u8) !u8 {
     const out = root.out;
     const self_name = args[0];
     var pbuf: [64]u8 = undefined;
-    const str = pbuf[0 .. lib.ttyname(&pbuf) catch |err| die(2, self_name, "readlink: {s}", .{@errorName(err)})];
+    const str = lib.ttyname(&pbuf) catch |err| die(2, self_name, "readlink: {s}", .{@errorName(err)});
     out.print("{s}\n", .{str}) catch |err| die(2, self_name, "print: {s}", .{@errorName(err)});
-    return 1 - @intFromBool(std.mem.eql(u8, "not a tty", str));
+    return @intFromBool(std.mem.eql(u8, "not a tty", str));
 }
