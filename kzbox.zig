@@ -31,9 +31,14 @@ pub fn main() !u8 {
         if (!std.mem.eql(u8, bname, "kzbox")) break;
         fed_args = fed_args[1..];
     }
+    if (std.mem.eql(u8, bname, "--help")) {
+        bname = bname[2..bname.len];
+        fed_args[0] = try alloc.dupeZ(u8, bname);
+    }
     for (applets) |applet| {
         if (std.mem.eql(u8, bname, applet.name)) return applet.main(fed_args) catch |err| die(1, bname, "{s}", .{@errorName(err)});
     }
+    if (std.mem.eql(u8, bname, "--version")) return lib.putVer(eout);
     if (std.mem.eql(u8, bname, "kzbox")) {
         var mock_args = try alloc.alloc([:0]u8, 1);
         mock_args[0] = try alloc.dupeZ(u8, "help");

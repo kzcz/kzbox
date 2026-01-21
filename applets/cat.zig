@@ -3,8 +3,9 @@ const root = @import("root");
 const lib = @import("kzlib");
 const argp = lib.arg_parser;
 const val = argp.val;
-pub const help: []const u8 = "ConcATenate files.";
-const Parser = argp.Gen(.{ val("u", false, "Flushes data as it is received instead."), val("version", false, "Print the version string."), val("help", false, "Print this help message.") }, .{ .allow_intermix = false });
+pub const usage: []const u8 = "cat [files...]" ++ lib.orCommon("cat");
+pub const desc: []const u8 = "ConcATenate files.";
+const Parser = argp.Gen(.{ val("u", false, "Flushes data as it is received instead."), val("version", false, "Print the version string."), val("help", false, "Print this help message.") }, .{}, .{ .usage = usage, .desc = desc });
 pub fn main(args: [][:0]u8) !u8 {
     const out = root.out;
     const eout = root.eout;
@@ -30,14 +31,8 @@ pub fn main(args: [][:0]u8) !u8 {
                     always_flush = true;
                     continue :w;
                 },
-                .help => {
-                    try Parser.help_printer(help, out);
-                    break :w;
-                },
-                .version => {
-                    try out.print("Version: {s}\n", .{root.detailed_version});
-                    break :w;
-                },
+                .version => return lib.putVer(out),
+                .help => return Parser.help_printer(out),
                 _ => unreachable,
             },
             .positional => |f| {

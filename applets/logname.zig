@@ -3,8 +3,9 @@ const root = @import("root");
 const lib = @import("kzlib");
 const argp = lib.arg_parser;
 const val = argp.val;
-pub const help: []const u8 = "[[change this]] Template for building applets.";
-const Parser = argp.Gen(.{ val("version", false, "Print the version string."), val("help", false, "Print this help message.") }, .{ .allow_intermix = false });
+pub const usage: []const u8 = "logname" ++ lib.orCommon("logname");
+pub const desc: []const u8 = "Print the login name of the current user.";
+const Parser = argp.Gen(.{ val("version", false, "Print the version string."), val("help", false, "Print this help message.") }, .{}, .{ .usage = usage, .desc = desc });
 pub fn main(args: [][:0]u8) !u8 {
     const out = root.out;
     const eout = root.eout;
@@ -18,14 +19,8 @@ pub fn main(args: [][:0]u8) !u8 {
             .eof => break,
             .flag => |f| {
                 switch (f) {
-                    .version => {
-                        try out.print("Version: {s}\n", .{root.detailed_version});
-                        return 0;
-                    },
-                    .help => {
-                        try Parser.help_printer(help, out);
-                        return 0;
-                    },
+                    .version => return lib.putVer(out),
+                    .help => return Parser.help_printer(out),
                     else => unreachable,
                 }
             },

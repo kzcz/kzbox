@@ -3,8 +3,9 @@ const root = @import("root");
 const lib = @import("kzlib");
 const argp = lib.arg_parser;
 const val = argp.val;
-pub const help: []const u8 = "Get the final pathname component of a set of paths.";
-const Parser = argp.Gen(.{ val("version", false, "Print the version string."), val("help", false, "Print this help message.") }, .{ .allow_intermix = false });
+pub const usage: []const u8 = "dirname <path> [path2 [...]]" ++ lib.orCommon("dirname");
+pub const desc: []const u8 = "Get the final pathname component of a set of paths.";
+const Parser = argp.Gen(.{ val("version", false, "Print the version string."), val("help", false, "Print this help message.") }, .{}, .{ .usage = usage, .desc = desc });
 pub fn main(args: [][:0]u8) !u8 {
     const out = root.out;
     const eout = root.eout;
@@ -17,19 +18,13 @@ pub fn main(args: [][:0]u8) !u8 {
             .eof => break,
             .flag => |f| {
                 switch (f) {
-                    .version => {
-                        try out.print("Version: {s}\n", .{root.detailed_version});
-                        return 0;
-                    },
-                    .help => {
-                        try Parser.help_printer(help, out);
-                        return 0;
-                    },
+                    .version => return lib.putVer(out),
+                    .help => return Parser.help_printer(out),
                     else => unreachable,
                 }
             },
             .positional => |f| {
-                try out.print("[EDIT ME] input: \"{s}\" output: \"{s}\"\n", .{ f, dirname(f) });
+                try out.print("{s}\n", .{dirname(f)});
             },
             else => unreachable,
         }
@@ -37,7 +32,7 @@ pub fn main(args: [][:0]u8) !u8 {
         try parser.printLastError(eout, self_name);
         return 1;
     }
-    return 0;
+    Parser.dieMissingArguments(eout, self_name);
 }
 fn dirname(path: []const u8) []const u8 {
     if (path.len == 0) return ".";

@@ -6,6 +6,14 @@ pub const UTmpX = if (blt.link_libc) @cImport(@cInclude("utmpx.h")) else struct 
     const utmpx = struct {};
 };
 const sbt = std.builtin.Type;
+pub inline fn orCommon(comptime name: []const u8) []const u8 {
+    return "\n\tor " ++ name ++ " [--help | --version]";
+}
+pub fn putVer(w: *std.Io.Writer) !u8 {
+    try w.writeAll("Version: " ++ root.detailed_version ++ "\n");
+    try w.flush();
+    return 0;
+}
 pub inline fn dieIfNotLibC(self_name: []const u8) void {
     if (!blt.link_libc) root.die(1, self_name, "Sorry, This program can not run when libc is not linked. Please recompile with libc so that you can use it.", .{});
 }
@@ -30,8 +38,12 @@ pub const arg_parser = struct {
     };
     pub const Arg = struct { name: [:0]const u8, has_args: bool = false, help: []const u8 };
     pub const Config = struct {
-        allow_intermix: bool,
+        allow_intermix: bool = false,
         skip_empty: bool = false,
+    };
+    pub const Help = struct {
+        usage: []const u8,
+        desc: []const u8,
     };
     inline fn tupleToArgs(comptime args: anytype) []const Arg {
         const ti = @typeInfo(@TypeOf(args));
@@ -54,7 +66,7 @@ pub const arg_parser = struct {
     pub fn val(name: [:0]const u8, has_args: bool, help: []const u8) Arg {
         return .{ .name = name, .has_args = has_args, .help = help };
     }
-    pub fn Gen(comptime arg_tuple: anytype, comptime _config: Config) type {
+    pub fn Gen(comptime arg_tuple: anytype, comptime _config: Config, comptime _help: Help) type {
         const _args: []const Arg = tupleToArgs(arg_tuple);
         var efields: [_args.len]sbt.EnumField = undefined;
         for (0.., _args) |i, arg| efields[i] = sbt.EnumField{ .name = arg.name, .value = i };
@@ -68,6 +80,7 @@ pub const arg_parser = struct {
             /// Do not change
             config: Config,
             const args = _args;
+            const help = _help;
             pub fn init(feed: []const [:0]const u8) @This() {
                 return .{ .parse = true, .feed = feed, .idx = 0, .off = 0, .config = _config };
             }
@@ -87,14 +100,18 @@ pub const arg_parser = struct {
             pub fn printLastError(self: *@This(), w: *std.Io.Writer, arg0: [:0]const u8) std.Io.Writer.Error!void {
                 return (self.__err orelse return).print(w, arg0);
             }
-            pub inline fn help_printer(comptime msg: []const u8, w: *std.Io.Writer) !void {
+            pub fn dieMissingArguments(w: *std.Io.Writer, name: [:0]const u8) noreturn {
+                _ = help_printer(w) catch {};
+                root.die(1, name, "Missing arguments", .{});
+            }
+            pub inline fn help_printer(w: *std.Io.Writer) !u8 {
                 const names = comptime blk: {
                     var ls: [args.len][:0]const u8 = undefined;
                     for (0.., args) |i, arg| ls[i] = arg.name;
                     break :blk ls;
                 };
                 const longest = comptime names[findLongestSlice([:0]const u8, &names)].len;
-                comptime var tw: []const u8 = "Synopsis: " ++ msg ++ "\nFlags: \n";
+                comptime var tw: []const u8 = "Usage: " ++ help.usage ++ "\nDescription: " ++ help.desc ++ "\nFlags: \n";
                 inline for (args) |arg| {
                     const n = arg.name;
                     tw = tw ++ comptime ("\t" ++ (if (n.len > 1) "--" else "-") ++ n ++ " " ** (1 + longest - n.len) ++ "- " ++ arg.help ++ "\n");
@@ -102,6 +119,7 @@ pub const arg_parser = struct {
                 tw = tw ++ "\nVersion: " ++ root.version ++ "\n";
                 try w.writeAll(tw);
                 try w.flush();
+                return 0;
             }
             pub fn nextArg(self: *@This()) Error!RT {
                 if (self.__err) |_| return error.AlreadyErrored;

@@ -3,8 +3,8 @@ const root = @import("root");
 const lib = @import("kzlib");
 const argp = lib.arg_parser;
 const val = argp.val;
-pub const usage: []const u8 = "Nobody knows" ++ lib.orCommon("Nobody knows");
-pub const desc: []const u8 = "[[change this]] Template for building applets.";
+pub const usage: []const u8 = "sleep" ++ lib.orCommon("sleep");
+pub const desc: []const u8 = "Sleep. ";
 const Parser = argp.Gen(.{ val("version", false, "Print the version string."), val("help", false, "Print this help message.") }, .{}, .{ .usage = usage, .desc = desc });
 pub fn main(args: [][:0]u8) !u8 {
     const out = root.out;
@@ -32,5 +32,7 @@ pub fn main(args: [][:0]u8) !u8 {
         try parser.printLastError(eout, self_name);
         return 1;
     }
+    const iargs = args[parser.idx..args.len];
+    if (iargs.len == 0) Parser.dieMissingArguments(eout, self_name);
     return 0;
 }

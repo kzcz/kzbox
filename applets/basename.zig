@@ -4,8 +4,9 @@ const lib = @import("kzlib");
 const argp = lib.arg_parser;
 const val = argp.val;
 const die = root.die;
-pub const help: []const u8 = "Get the last element of a path, and optionally remove a suffix.";
-const Parser = argp.Gen(.{ val("suffix", true, "Removes the suffix from each of following paths."), val("version", false, "Print the version string."), val("help", false, "Print this help message.") }, .{ .allow_intermix = false });
+pub const usage: []const u8 = "basename <path> [suffix]\n\tor basename --suffix <suffix> <path1> [path2 [...]]" ++ lib.orCommon("basename");
+pub const desc: []const u8 = "Get the last element of a path (or list of), and optionally, remove a suffix.";
+const Parser = argp.Gen(.{ val("suffix", true, "Removes the suffix from each of following paths."), val("version", false, "Print the version string."), val("help", false, "Print this help message.") }, .{}, .{ .usage = usage, .desc = desc });
 pub fn main(args: [][:0]u8) !u8 {
     const out = root.out;
     const eout = root.eout;
@@ -21,14 +22,8 @@ pub fn main(args: [][:0]u8) !u8 {
             .eof => break,
             .flag => |f| {
                 switch (f) {
-                    .version => {
-                        try out.print("Version: {s}\n", .{root.detailed_version});
-                        return 0;
-                    },
-                    .help => {
-                        try Parser.help_printer(help, out);
-                        return 0;
-                    },
+                    .version => return lib.putVer(out),
+                    .help => return Parser.help_printer(out),
                     else => unreachable,
                 }
             },
@@ -46,7 +41,7 @@ pub fn main(args: [][:0]u8) !u8 {
         return 1;
     }
     const iargs = args[parser.idx..args.len];
-    if (iargs.len == 0) return die(1, self_name, "Missing arguments", .{});
+    if (iargs.len == 0) Parser.dieMissingArguments(eout, self_name);
     if (suffix) |suff| {
         for (iargs) |arg| {
             try out.print("{s}\n", .{basename(arg, suff)});

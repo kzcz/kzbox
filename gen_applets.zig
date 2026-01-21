@@ -12,7 +12,7 @@ pub fn main() !u8 {
     var file = try cwd.createFileZ(try std.fmt.allocPrintSentinel(alloc, "{s}/applets.zig", .{args[1]}, 0), .{});
     var writer = file.writer(&.{});
     var intr = &writer.interface;
-    try intr.writeAll("pub const Applet = struct { name: []const u8, help: []const u8, main: *const fn (args: [][:0]u8) anyerror!u8 };\npub fn load_applet(comptime name: []const u8, root: type) Applet {\n    return .{ .name = name, .help = root.help, .main = root.main };\n}\npub var _ap = [_]Applet{\n");
+    try intr.writeAll("pub const Applet = struct { name: []const u8, usage: []const u8, desc: []const u8, main: *const fn (args: [][:0]u8) anyerror!u8 };\npub fn load_applet(comptime name: []const u8, root: type) Applet {\n    return .{ .name = name, .usage = root.usage, .desc = root.desc, .main = root.main };\n}\npub var _ap = [_]Applet{\n");
     var dir = (try std.fs.cwd().openDir("applets", .{ .iterate = true })).iterate();
     while (try dir.next()) |entry| {
         if (entry.name.len < 4 or !std.mem.eql(u8, entry.name[entry.name.len - 4 ..], ".zig")) continue;
