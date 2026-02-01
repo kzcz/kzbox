@@ -18,8 +18,46 @@ pub inline fn die(code: u8, util_name: []const u8, comptime fmt: []const u8, arg
     std.process.exit(code);
 }
 const Applet = _apts.Applet;
-pub const applets: []Applet = _apts._ap[0.._apts._ap.len];
+fn str_lt(ctx: @TypeOf(void), aa: Applet, ba: Applet) bool {
+    _ = ctx;
+    const a = aa.name;
+    const b = ba.name;
+    if (a.len != b.len) return a.len < b.len;
+    for (a, b) |e, f| {
+        if (e != f) return e < f;
+    }
+    return false;
+}
+pub const applets = blk: {
+    var ret: [_apts._ap.len]Applet = undefined;
+    for (0.., _apts._ap) |i, a| ret[i] = a;
+    std.mem.sort(Applet, &ret, void, str_lt);
+    const final = ret;
+    break :blk @as([]const Applet, &final);
+};
+const indexes = blk: {
+    var idxes: [applets[applets.len - 1].name.len + 1]?u8 = undefined;
+    for (0..idxes.len) |i| idxes[i] = null;
+    var cur: u8 = 0;
+    for (0.., applets) |i, a| {
+        const len: u8 = @intCast(a.name.len);
+        if (cur == len) continue;
+        cur = len;
+        idxes[cur] = i;
+    }
+    break :blk idxes;
+};
+pub inline fn resolve_applet(name: []const u8) ?Applet {
+    if (name.len > indexes.len) return null;
+    const start = indexes[name.len] orelse return null;
+    for (applets[start..applets.len]) |a| {
+        if (a.name.len != name.len) break;
+        if (lib.mem_eql(name, a.name)) return a;
+    }
+    return null;
+}
 pub fn main() !u8 {
+    const help_fun = comptime resolve_applet("help").?.main;
     defer out.flush() catch unreachable;
     defer eout.flush() catch unreachable;
     const args = try std.process.argsAlloc(alloc);
@@ -35,14 +73,12 @@ pub fn main() !u8 {
         bname = bname[2..bname.len];
         fed_args[0] = try alloc.dupeZ(u8, bname);
     }
-    for (applets) |applet| {
-        if (std.mem.eql(u8, bname, applet.name)) return applet.main(fed_args) catch |err| die(1, bname, "{s}", .{@errorName(err)});
-    }
     if (std.mem.eql(u8, bname, "--version")) return lib.putVer(eout);
     if (std.mem.eql(u8, bname, "kzbox")) {
         var mock_args = try alloc.alloc([:0]u8, 1);
         mock_args[0] = try alloc.dupeZ(u8, "help");
-        return applets[0].main(mock_args) catch |err| die(1, "help", "{s}", .{@errorName(err)});
+        return help_fun(mock_args) catch |err| die(1, "help", "{s}", .{@errorName(err)});
     }
+    if (resolve_applet(bname)) |applet| return applet.main(fed_args) catch |err| die(1, bname, "{s}", .{@errorName(err)});
     die(1, bname, "Applet not found", .{});
 }
