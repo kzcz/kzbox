@@ -6,7 +6,7 @@ const val = argp.val;
 pub const usage: []const u8 = "sleep" ++ lib.orCommon("sleep");
 pub const desc: []const u8 = "Sleep. ";
 const mem_eql = lib.mem_eql;
-const Parser = argp.Gen(.{ val("version", false, "Print the version string."), val("help", false, "Print this help message.") }, .{}, .{ .usage = usage, .desc = desc });
+const Parser = argp.Gen(argp.std_vh, .{}, .{ .usage = usage, .desc = desc });
 const linux = std.os.linux;
 const TsInt = @typeInfo(linux.timespec).@"struct".fields[0].type;
 const ns2s = 1_000_000_000;
@@ -14,8 +14,7 @@ pub fn main(args: [][:0]u8) !u8 {
     const out = root.out;
     const eout = root.eout;
     const alloc = root.alloc;
-    const self_name = args[0];
-    var parser = Parser.init(args[1..]);
+    var parser = Parser.init(args);
     while (parser.nextArg()) |arg| {
         switch (arg) {
             .eof => break,
@@ -30,17 +29,17 @@ pub fn main(args: [][:0]u8) !u8 {
             else => unreachable,
         }
     } else |_| {
-        try parser.printLastError(eout, self_name);
+        try parser.printLastError(eout);
         return 1;
     }
     const iargs = args[parser.idx..args.len];
-    if (iargs.len == 0) Parser.dieMissingArguments(eout, self_name);
+    if (iargs.len == 0) Parser.dieMissingArguments(eout);
     var l = try std.ArrayList(linux.timespec).initCapacity(alloc, 4);
     defer l.deinit(alloc);
     try l.append(alloc, .{ .sec = 0, .nsec = 0 });
     const imax = std.math.maxInt(TsInt);
     for (0.., iargs) |idx, arg| {
-        const ts = parseTimespec(arg) catch |err| root.die(1, self_name, "\"{s}\" (argument #{d}): {s}", .{ arg, idx, switch (err) {
+        const ts = parseTimespec(arg) catch |err| root.die(1, "\"{s}\" (argument #{d}): {s}", .{ arg, idx, switch (err) {
             error.InvalidCharacter => "Invalid character.",
             error.Overflow => "Value too long.",
             error.TooLong => "Fractional part too long.",

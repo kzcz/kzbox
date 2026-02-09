@@ -11,11 +11,17 @@ pub var out: *std.io.Writer = &wo.interface;
 pub var eout: *std.io.Writer = &we.interface;
 pub const version = @import("build.zig.zon").version;
 pub const detailed_version = version ++ " zig " ++ blt.zig_version_string ++ " os " ++ @tagName(blt.os.tag) ++ " cpu " ++ @tagName(blt.cpu.arch) ++ " " ++ blt.cpu.model.name;
-pub inline fn die(code: u8, util_name: []const u8, comptime fmt: []const u8, args: anytype) noreturn {
-    eout.writeAll(util_name) catch unreachable;
+pub var self_name: [:0]const u8 = "kzbox";
+pub inline fn die(code: u8, comptime fmt: []const u8, args: anytype) noreturn {
+    eout.writeAll(self_name) catch unreachable;
     eout.print(": " ++ fmt ++ "\n", args) catch unreachable;
     eout.flush() catch unreachable;
     std.process.exit(code);
+}
+pub inline fn dieErr(code: u8, tool_or_file: ?[]const u8, err: anyerror) noreturn {
+    const name = @errorName(err);
+    if (tool_or_file) |tof| die(code, "{s}: {s}", .{ tof, name });
+    die(1, "{s}", .{name});
 }
 const Applet = _apts.Applet;
 fn str_lt(ctx: @TypeOf(void), aa: Applet, ba: Applet) bool {
@@ -72,13 +78,16 @@ pub fn main() !u8 {
     if (std.mem.eql(u8, bname, "--help")) {
         bname = bname[2..bname.len];
         fed_args[0] = try alloc.dupeZ(u8, bname);
+        self_name = fed_args[0];
     }
     if (std.mem.eql(u8, bname, "--version")) return lib.putVer(eout);
     if (std.mem.eql(u8, bname, "kzbox")) {
         var mock_args = try alloc.alloc([:0]u8, 1);
         mock_args[0] = try alloc.dupeZ(u8, "help");
-        return help_fun(mock_args) catch |err| die(1, "help", "{s}", .{@errorName(err)});
+        self_name = mock_args[0];
+        return help_fun(mock_args) catch |err| dieErr(1, null, err);
     }
-    if (resolve_applet(bname)) |applet| return applet.main(fed_args) catch |err| die(1, bname, "{s}", .{@errorName(err)});
-    die(1, bname, "Applet not found", .{});
+    self_name = try alloc.dupeZ(u8, bname);
+    if (resolve_applet(bname)) |applet| return applet.main(fed_args) catch |err| dieErr(1, null, err);
+    die(1, "Applet not found", .{});
 }

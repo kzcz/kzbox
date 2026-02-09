@@ -5,14 +5,15 @@ const argp = lib.arg_parser;
 const val = argp.val;
 pub const usage: []const u8 = "Nobody knows" ++ lib.orCommon("Nobody knows");
 pub const desc: []const u8 = "[[change this]] Template for building applets.";
-const Parser = argp.Gen(.{ val("version", false, "Print the version string."), val("help", false, "Print this help message.") }, .{}, .{ .usage = usage, .desc = desc });
+const Parser = argp.Gen(argp.std_vh ++ .{}, .{}, .{ .usage = usage, .desc = desc });
 pub fn main(args: [][:0]u8) !u8 {
     const out = root.out;
     const eout = root.eout;
     const alloc = root.alloc;
-    const self_name = args[0];
     _ = alloc;
-    var parser = Parser.init(args[1..]);
+    var parser = Parser.init(args);
+    const self_name = parser.argv0;
+    _ = self_name;
     while (parser.nextArg()) |arg| {
         switch (arg) {
             .eof => break,
@@ -29,7 +30,7 @@ pub fn main(args: [][:0]u8) !u8 {
         try out.print("{}\n", .{arg});
         try out.flush();
     } else |_| {
-        try parser.printLastError(eout, self_name);
+        try parser.printLastError(eout);
         return 1;
     }
     return 0;

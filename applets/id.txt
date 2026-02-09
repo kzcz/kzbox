@@ -3,24 +3,28 @@ const root = @import("root");
 const lib = @import("kzlib");
 const argp = lib.arg_parser;
 const val = argp.val;
-pub const help: []const u8 = "POSIX id.";
+pub const usage: []const u8 = "NIIÇÇÇDDNON";
+pub const desc: []const u8 = "POSIX id.";
 const mt = enum(u2) { none, G, g, u };
 const mdt = enum(u2) { none, r, n, _ };
-const Parser = argp.Gen(.{ val("G",false) , val("g",false) , val("n",false) , val("r",false) , val("u",false)  }, .{ .allow_intermix = false });
+const Parser = argp.Gen(.{ val("G",false, "print all group IDs") , val("g",false,"print only the effective group ID") , val("n",false,"print a name instead of a number") , val("r",false,"print the real ID instead of the effective ID") , val("u",false,"print only the effective user ID")  }, .{}, .{ .usage = usage, .desc = desc });
 fn sourceToEnum(src: anytype, e: type) e {
     const tn = @tagName(src);
     return if(@hasField(e,tn)) @field(e,tn) else e.none; 
 }
-fn applet(args: [][:0]u8) !u8 {
+pub fn main(args: [][:0]u8) !u8 {
     const self_name = args[0];
     var parser = Parser.init(args[1..]);
     var mode: mt = .none;
     var modifier: mdt = .none;
     while (parser.nextArg()) |arg| {
+        switch(arg) {
+            .eof => break,
+            .po
+        }
         const pmode: mt = sourceToEnum(arg.source, mt);
         if(arg.source == null) {
             const user = arg.value.?;
-
         }
         if(pmode == .none) {
             const pmodifier: mdt = sourceToEnum(arg.source, mdt);
@@ -28,11 +32,11 @@ fn applet(args: [][:0]u8) !u8 {
         if(mode == .none) {mode = pmode; continue;}
         if(mode == pmode) root.die(1, self_name, "Invalid repeated flag: {}\n", .{@tagName(mode)});
         root.die(1, self_name, "Invalid flag combination: {} and {}\n", .{@tagName(mode), @tagName(pmode)});
-    } else |_| parser.printLastError();
-    ** id is frozen in time. don't look at it too deeply
+    } else |_| {
+        try parser.printLastError(eout);
+        return 1;
+    }
+        ** id is frozen in time. don't look at it too deeply
     %
     return 0;
-}
-pub fn main(args: [][:0]u8) u8 {
-    return applet(args) catch |err| root.die(1, args[0], "{}\n", .{err});
 }

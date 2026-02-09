@@ -6,6 +6,7 @@ const lib_c = @import("lib/c.zig");
 
 pub extern "c" fn strerror(c_int) [*:0]const u8;
 const sbt = std.builtin.Type;
+
 pub const mem_eql = lib_string.mem_eql;
 pub const findStr = lib_string.findStr;
 pub const findLongestSlice = lib_string.findLongestSlice;
@@ -28,8 +29,8 @@ pub fn putVer(w: *std.Io.Writer) !u8 {
     try w.flush();
     return 0;
 }
-pub inline fn dieIfNotLibC(self_name: []const u8) void {
-    if (!blt.link_libc) root.die(1, self_name, "Sorry, This program can not run when libc is not linked. Please recompile with libc so that you can use it.", .{});
+pub inline fn dieIfNotLibC() void {
+    if (!blt.link_libc) root.die(1, "Sorry, This program can not run when libc is not linked. Please recompile with libc so that you can use it.", .{});
 }
 pub inline fn assert(value: bool, comptime msg: []const u8) void {
     if (!value) @compileError(msg);
@@ -82,6 +83,8 @@ pub const arg_parser = struct {
     pub fn val(name: [:0]const u8, has_args: bool, help: []const u8) Arg {
         return .{ .name = name, .has_args = has_args, .help = help };
     }
+    /// Standard version and help flags
+    pub const std_vh = .{ val("version", false, "Print the version string."), val("help", false, "Print this help message.") };
     pub fn Gen(comptime arg_tuple: anytype, comptime _config: Config, comptime _help: Help) type {
         const _args: []const Arg = tupleToArgs(arg_tuple);
         var efields: [_args.len]sbt.EnumField = undefined;
@@ -95,10 +98,21 @@ pub const arg_parser = struct {
             __err: ?ErrInfo = null,
             /// Do not change
             config: Config,
+            /// The first item of the provided feed.
+            argv0: [:0]const u8,
             const args = _args;
             const help = _help;
             pub fn init(feed: []const [:0]const u8) @This() {
-                return .{ .parse = true, .feed = feed, .idx = 0, .off = 0, .config = _config };
+                var f: []const [:0]const u8 = undefined;
+                var a0: [:0]const u8 = undefined;
+                if (feed.len == 0) {
+                    f = feed;
+                    a0 = root.self_name;
+                } else {
+                    f = feed[1..feed.len];
+                    a0 = feed[0];
+                }
+                return .{ .parse = true, .feed = f, .idx = 0, .off = 0, .config = _config, .argv0 = a0 };
             }
             pub const RTEnum = PrivRTEnum;
             pub const RT = union(enum(u2)) {
@@ -113,12 +127,12 @@ pub const arg_parser = struct {
                 }
                 return null;
             }
-            pub fn printLastError(self: *@This(), w: *std.Io.Writer, arg0: [:0]const u8) std.Io.Writer.Error!void {
-                return (self.__err orelse return).print(w, arg0);
+            pub fn printLastError(self: *@This(), w: *std.Io.Writer) std.Io.Writer.Error!void {
+                return (self.__err orelse return).print(w, self.argv0);
             }
-            pub fn dieMissingArguments(w: *std.Io.Writer, name: [:0]const u8) noreturn {
+            pub fn dieMissingArguments(w: *std.Io.Writer) noreturn {
                 _ = help_printer(w) catch {};
-                root.die(1, name, "Missing arguments", .{});
+                root.die(1, "Missing arguments", .{});
             }
             pub inline fn help_printer(w: *std.Io.Writer) !u8 {
                 const names = comptime blk: {
