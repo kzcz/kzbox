@@ -1,0 +1,40 @@
+# Definitions
+input method -> one of "string" / "file"
+output method -> one of "one" / "many"
+
+# -f / --file -> adds a file to the list of files to be processed (conflicts with input strings)
+
+# -o / --out / --output -> sets an output file/folder (conflicts with output regex)
+if the input method is string and the output method is many, this fails.
+otherwise if the input method is string the output is created as a file
+if the input method is file, if the output method is many, individual output files are created in the provided folder, if it's 'one' instead, they're concatenated to that file
+
+# -m -> sets the output method
+'one' concatenates the output of each application into the output file (or buffer)
+'many' if the input method is files, it outputs individual files according to the method (folder vs regex)
+if the input is string, acts the same as 'one'.
+providing strings default to one, providing files default to many
+
+# --or / --out-rgx / --output-regex -> for each file a regex "find a replace" operation is run on said file to determine the output file.
+if the output method is one or if the input method is string, this fails.
+
+kfmt <transform string> -f file [-f file2 [...]] -o folder/
+kfmt <transform string> -f file [-f file2 [...]] --or 'output_file_regex/ab$1$2...'
+kfmt <transform string> <string> [string2 [...]] # (outputs to stdout by default)
+kfmt <transform string> <string> [string2 [...]] -o file
+
+If stdin is a pipe, it interprets it as neither a string or a file, but can be used as both, depending on the context, that allows the form
+echo "string" | kfmt <transform string>
+without any "-f file" or "string"
+if strings or files are included, stdin coerces to that same input method.
+
+# transform string format
+a transform string is formed by a series of operations, which themselves may or may not take arguments.
+When an operation has optional arguments unused, it can be cut early with ';'.
+The last operation of a string will have it's unused optional arguments be set to null
+most operations are defined through a single character, though, multi-character operations can be called in the following way:
+`-'name'args...`
+when passing a single-character name, it instead has the effect of setting optional arguments to null.
+# Operations
+t direction characters? : trims characters from the set (characters) (by default '\n\t '), in the direction (direction) (by default g).
+Direction can be one of left, right, global

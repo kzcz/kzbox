@@ -1,0 +1,17 @@
+# KFmt function documentation
+This file explains in depth how the Killed Formatter (KFmt) works, how to modify it's code and norms that should be followed. It also covers the integrated language's syntax.
+# Adding new functions
+The general template for any function is
+```zig
+fn name(state: []const u8, par1: Type1, ...) ErrorSet![]const u8 {
+    // ...
+}
+```
+To make it indexable, you also have to add it to the index like this:
+```zig
+const transforms: []const Transform = &[_]Transform{ (... everything else), .init("public_name", @TypeOf(name), &name) };
+```
+where name refers to the function name, and public_name refers to the externally observed name.
+# Input values
+In the template above, Type# can not be a comptime type (like noreturn). It can only be an optional, a string, or an enum
+Prefer the most specific input values your function can take, if a parameter can o

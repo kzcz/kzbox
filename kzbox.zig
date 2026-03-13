@@ -24,14 +24,10 @@ pub inline fn dieErr(code: u8, tool_or_file: ?[]const u8, err: anyerror) noretur
     die(1, "{s}", .{name});
 }
 const Applet = _apts.Applet;
-fn str_lt(ctx: @TypeOf(void), aa: Applet, ba: Applet) bool {
-    _ = ctx;
-    const a = aa.name;
-    const b = ba.name;
+fn str_lt(_: @TypeOf(void), aa: Applet, ba: Applet) bool {
+    const a, const b = .{ aa.name, ba.name };
     if (a.len != b.len) return a.len < b.len;
-    for (a, b) |e, f| {
-        if (e != f) return e < f;
-    }
+    for (a, b) |e, f| if (e != f) return e < f;
     return false;
 }
 pub const applets = blk: {
@@ -54,7 +50,7 @@ const indexes = blk: {
     break :blk idxes;
 };
 pub inline fn resolve_applet(name: []const u8) ?Applet {
-    if (name.len > indexes.len) return null;
+    if (name.len >= indexes.len) return null;
     const start = indexes[name.len] orelse return null;
     for (applets[start..applets.len]) |a| {
         if (a.name.len != name.len) break;
