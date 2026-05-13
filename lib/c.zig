@@ -1,19 +1,21 @@
 const std = @import("std");
+const root = @import("root");
 const mem_eql = @import("string.zig").mem_eql;
 pub const UTmpX = @import("utmpx").utmpx;
 pub fn UTmpIterator(UTmp: type) type {
     return struct {
-        buf: UTmp,
-        file: std.fs.File,
-        pub fn init() !@This() {
+        buf: UTmp align(8),
+        file: std.Io.File,
+        io: std.Io,
+        pub fn init(io: std.Io) !@This() {
             if (!@import("builtin").link_libc) return error.LibCNotLinked;
-            return .{ .file = try std.fs.openFileAbsoluteZ("/var/run/utmp", .{}), .buf = undefined };
+            return .{ .file = try std.Io.Dir.openFileAbsolute(io, "/var/run/utmp", .{}), .buf = undefined, .io = io };
         }
         pub fn deinit(self: *@This()) void {
-            self.file.close();
+            self.file.close(self.io);
         }
         pub fn next(self: *@This()) !?UTmp {
-            const ret = try self.file.read(@ptrCast(&self.buf));
+            const ret = try self.file.readStreaming(self.io, &[_][]u8{@ptrCast(&self.buf)});
             if (ret == 0) return null;
             if (ret != @sizeOf(UTmp)) unreachable;
             return self.buf;
@@ -23,26 +25,26 @@ pub fn UTmpIterator(UTmp: type) type {
 
 pub fn ttyname(buf: []u8) ![]const u8 {
     const nat = "not a tty";
-    if (std.posix.isatty(0)) {
-        return buf[0..(try std.posix.readlink("/proc/self/fd/0", buf)).len];
+    if (std.posix.system.isatty(0) > 0) {
+        return buf[0..try std.Io.Dir.readLinkAbsolute(root.init.io, "/proc/self/fd/0", buf)];
     } else {
         if (buf.len < nat.len) return error.Overflow;
         @memcpy(buf[0..nat.len], nat);
         return buf[0..nat.len];
     }
 }
-pub fn loginuid() !usize {
-    var f = std.fs.openFileAbsoluteZ("/proc/self/loginuid", .{}) catch return error.LoginuidUnavailable;
-    defer f.close();
+pub fn loginuid(io: std.Io) !usize {
+    var f = std.Io.Dir.openFileAbsolute(io, "/proc/self/loginuid", .{}) catch return error.LoginuidUnavailable;
+    defer f.close(io);
     var buf: [16]u8 = undefined;
-    const r = try f.read(&buf);
+    const r = try f.readPositionalAll(io, &buf, 0);
     return std.fmt.parseInt(usize, buf[0..r], 0);
 }
-pub fn findTLogin() !?[]const u8 {
+pub fn findTLogin(io: std.Io) !?[]const u8 {
     var name_buf: [64]u8 = undefined;
     const name = try ttyname(&name_buf);
     if (mem_eql(name, "not a tty")) return error.NotATTY;
-    var utmp_iter = UTmpIterator(@import("utmpx").utmpx).init() catch unreachable;
+    var utmp_iter = UTmpIterator(@import("utmpx").utmpx).init(io) catch unreachable;
     const name_wo_dev = name[5..name.len];
     while (try utmp_iter.next()) |ent| {
         if (ent.ut_type != 7) continue;
@@ -50,8 +52,8 @@ pub fn findTLogin() !?[]const u8 {
     }
     return null;
 }
-pub fn getlogin() !?[]const u8 {
-    const v = loginuid() catch return findTLogin();
+pub fn getlogin(io: std.Io) !?[]const u8 {
+    const v = loginuid(io) catch return findTLogin(io);
     const pw = std.c.getpwuid(@intCast(v)) orelse return error.GetPwUid;
     const n = pw.name orelse return null;
     return std.mem.span(n);

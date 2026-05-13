@@ -7,6 +7,7 @@ pub const usage: []const u8 = "cat [files...]" ++ lib.orCommon("cat");
 pub const desc: []const u8 = "ConcATenate files.";
 const Parser = argp.Gen(.{val("u", false, "Flushes data as it is received instead.")} ++ argp.std_vh, .{}, .{ .usage = usage, .desc = desc });
 pub fn main(args: [][:0]u8) !u8 {
+    const io = root.init.io;
     const out = root.out;
     const eout = root.eout;
     const alloc = root.alloc;
@@ -15,7 +16,7 @@ pub fn main(args: [][:0]u8) !u8 {
     defer alloc.free(reader_buf);
     var always_flush: bool = false;
 
-    const cwd = std.fs.cwd();
+    const cwd = std.Io.Dir.cwd();
     var parser = blk: {
         var a: []const [:0]const u8 = args;
         if (a.len == 1) {
@@ -52,16 +53,18 @@ pub fn main(args: [][:0]u8) !u8 {
         var freal = true;
         var file = if (f.len == 1 and f[0] == '-') bl: {
             freal = false;
-            break :bl std.fs.File.stdin();
-        } else cwd.openFile(f, .{ .mode = .read_only }) catch |err| {
+            break :bl std.Io.File.stdin();
+        } else cwd.openFile(io, f, .{ .mode = .read_only }) catch |err| {
             try warn(eout, f, err);
             failed = true;
             continue;
         };
-        defer if (freal) file.close();
+        defer if (freal) file.close(io);
         var count: usize = undefined;
+        var f_reader = file.reader(io, &.{});
+        var reader = &f_reader.interface;
         const last_err: ?anyerror = (blk: while (true) {
-            count = file.read(reader_buf) catch |err| break :blk err;
+            count = reader.readSliceShort(reader_buf) catch |err| break :blk err;
             if (count == 0) break :blk null;
             out.writeAll(reader_buf[0..count]) catch |err| break :blk err;
             if (always_flush) out.flush() catch |err| break :blk err;

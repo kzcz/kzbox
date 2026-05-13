@@ -29,7 +29,7 @@ pub fn main(args: [][:0]u8) !u8 {
         return 1;
     }
     lib.dieIfNotLibC();
-    if (lib.getlogin() catch null) |logname| {
+    if (lib.getlogin(root.init.io) catch null) |logname| {
         try out.print("{s}\n", .{logname});
         try out.flush();
         return 0;

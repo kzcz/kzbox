@@ -87,9 +87,13 @@ pub const arg_parser = struct {
     pub const std_vh = .{ val("version", false, "Print the version string."), val("help", false, "Print this help message.") };
     pub fn Gen(comptime arg_tuple: anytype, comptime _config: Config, comptime _help: Help) type {
         const _args: []const Arg = tupleToArgs(arg_tuple);
-        var efields: [_args.len]sbt.EnumField = undefined;
-        for (0.., _args) |i, arg| efields[i] = sbt.EnumField{ .name = arg.name, .value = i };
-        const PrivRTEnum: type = @Type(.{ .@"enum" = .{ .tag_type = u16, .decls = &[0]sbt.Declaration{}, .is_exhaustive = false, .fields = &efields } });
+        var efields_names: [_args.len][:0]const u8 = undefined;
+        var efields_vals: [_args.len]u16 = undefined;
+        for (0.., _args) |i, arg| {
+            efields_names[i] = arg.name;
+            efields_vals[i] = i;
+        }
+        const PrivRTEnum: type = @Enum(u16, .nonexhaustive, &efields_names, &efields_vals);
         return struct {
             parse: bool,
             feed: []const [:0]const u8,
@@ -252,9 +256,16 @@ pub fn EnumToList(Enum: type, Data: type) type {
     const ti = @typeInfo(Enum);
     assert(ti == .@"enum", "expected an enum, got " ++ @typeName(Enum));
     const enum_fields = @typeInfo(Enum).@"enum".fields;
-    var fields: [enum_fields.len]sbt.StructField = undefined;
-    inline for (&fields, enum_fields) |*e, f| e.* = .{ .is_comptime = false, .name = f.name, .type = Data, .alignment = @alignOf(Data), .default_value_ptr = null };
-    return @Type(.{ .@"struct" = .{ .is_tuple = false, .layout = .auto, .decls = &.{}, .fields = &fields } });
+    const ef_len = enum_fields.len;
+    var f_names: [ef_len][:0]const u8 = undefined;
+    var f_types: [ef_len]type = undefined;
+    var f_attrs: [ef_len]sbt.StructField.Attributes = undefined;
+    inline for (0..ef_len, enum_fields) |i, f| {
+        f_names[i] = f.name;
+        f_types[i] = Data;
+        f_attrs[i] = .{ .@"align" = @alignOf(Data), .@"comptime" = false, .default_value_ptr = null };
+    }
+    @Struct(.auto, null, &f_names, &f_types, &f_attrs);
 }
 
 pub const MemInfo = struct {
@@ -268,11 +279,12 @@ pub const MemInfo = struct {
     unit_in_bytes: usize = 0,
 };
 const miFields = [_][]const u8{ "MemTotal", "MemFree", "MemAvailable", "Buffers", "Cached", "SwapTotal", "SwapFree" };
-pub fn meminfo() !MemInfo {
+pub fn meminfo(io: std.Io, buf: []u8) !MemInfo {
+    if (buf.len < 3072) return error.Overflow;
     var rt: MemInfo = .{};
-    var pmi = try std.fs.openFileAbsoluteZ("/proc/meminfo", .{});
-    var buf: [3072]u8 = undefined;
-    var info = switch (try pmi.read(&buf)) {
+    var pmi = try std.Io.Dir.openFileAbsolute(io, "/proc/meminfo", .{});
+    var reader = pmi.reader(io, &.{});
+    var info = switch (try reader.interface.readSliceShort(buf)) {
         0 => unreachable,
         else => |v| buf[0..v],
     };

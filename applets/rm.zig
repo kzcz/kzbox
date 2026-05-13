@@ -6,6 +6,16 @@ const val = argp.val;
 pub const usage: []const u8 = "rm [-firR] <file1>" ++ lib.orCommon("Nobody knows");
 pub const desc: []const u8 = "[[change this]] Template for building applets.";
 const Parser = argp.Gen(.{ val("f", false, "Force file removal; Do not ask for confirmation"), val("i", false, "Interactive; Ask for confirmation"), val("r", false, "recursive"), val("R", false, "Recursive") } ++ argp.std_vh, .{}, .{ .usage = usage, .desc = desc });
+const RmOpts = struct {
+    recursive: bool,
+    force: bool,
+    Interactive: enum { no, soft, full },
+};
+//fn rm_file(path: []const u8, opts: RmOpts) !void {
+//}
+//fn rm_dir(path: []const u8, opts: RmOpts) !void {
+//
+//}
 pub fn main(args: [][:0]u8) !u8 {
     const out = root.out;
     const eout = root.eout;

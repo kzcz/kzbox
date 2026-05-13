@@ -2,3 +2,4 @@
 zig-out/
 applets.zig
 zetch.c
+gen_applets

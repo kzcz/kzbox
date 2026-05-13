@@ -62,7 +62,7 @@ fn print_uname(w: W, uname: sys.utsname) !void {
 }
 fn print_loginfo(w: W, uname: sys.utsname) !void {
     var ttybuf: [64]u8 = undefined;
-    try w.print("{s}@{s}; Console: {s}\n", .{ (lib.getlogin() catch null) orelse "(unknown)", uname.nodename, lib.ttyname(&ttybuf) catch "(unknown tty)" });
+    try w.print("{s}@{s}; Console: {s}\n", .{ (lib.getlogin(root.init.io) catch null) orelse "(unknown)", uname.nodename, lib.ttyname(&ttybuf) catch "(unknown tty)" });
 }
 fn t2T(t: anytype) @TypeOf(t) {
     return @as(@TypeOf(t), @intFromBool(t > 0));
@@ -92,7 +92,9 @@ fn print_uptime(w: W, ut: isize) !void {
 }
 
 fn print_ram(w: W) !void {
-    const meminfo = try lib.meminfo();
+    const buf = try root.alloc.alloc(u8, 3072);
+    defer root.alloc.free(buf);
+    const meminfo = try lib.meminfo(root.init.io, buf);
 
     const MB = 1048576;
     const unit = meminfo.unit_in_bytes;

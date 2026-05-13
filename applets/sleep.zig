@@ -67,7 +67,7 @@ fn sleep(spec: linux.timespec) void {
     var req = spec;
     var rem: linux.timespec = undefined;
     while (true) {
-        switch (linux.E.init(linux.clock_nanosleep(.MONOTONIC, .{ .ABSTIME = false }, &req, &rem))) {
+        switch (linux.errno(linux.clock_nanosleep(.MONOTONIC, .{ .ABSTIME = false }, &req, &rem))) {
             .SUCCESS => return,
             .INTR => {
                 req = rem;
